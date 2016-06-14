@@ -25,8 +25,8 @@ Please look at www.leoluk.de/paperless-caching/pqdl for updates.
 
 """
 
-__version__ = "0.3.3"
-__status__ = "beta"
+__version__ = "0.3.5"
+__status__ = "stable"
 __author__ = "Leopold Schabel"
 
 ### pylint
@@ -565,14 +565,15 @@ class PqBrowser(mechanize.Browser):
     def login_gc(self, username, password, urlbase):
         """Login to GC.com site."""
         logger = logging.getLogger('browser.login')
-        self.open("%s/login/default.aspx?RESET=Y"
+        self.open("%s/login/default.aspx?RESETCOMPLETE=true"
                   % urlbase)
         #for f in self.forms():
         #   print f
         self.select_form(name="aspnetForm")
-        self.form['ctl00$SiteContent$tbUsername'] = username
-        self.form['ctl00$SiteContent$tbPassword'] = password
-        self.submit()
+        self.form['ctl00$ContentBody$tbUsername'] = username
+        self.form['ctl00$ContentBody$tbPassword'] = password        
+        self.submit(name="ctl00$ContentBody$btnSignIn")
+        
         response = self.response().read()
         logger.log(5, response)
         if not '/my/default.aspx' in response:
@@ -720,7 +721,7 @@ def main():
     if opts.netdebug:
         import socks
         import socket
-        socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 1080)
+        socks.setdefaultproxy(socks.PROXY_TYPE_HTTP, "127.0.0.1", 8080)
         socket.socket = socks.socksocket
 
     browser = PqBrowser()
@@ -901,9 +902,9 @@ def main():
                 }
 
         single = {
-                'normal':'{mapstr}{chkdelete}_{friendlyname}',
+                'normal':'{mapstr}{friendlyname}',
                 'myfinds':'{mapstr}MyFinds',
-                'waypoints':'{mapstr}{chkdelete}_{friendlyname}_waypoints'
+                'waypoints':'{mapstr}{friendlyname}_waypoints'
                 }
 
         def __getattr__(self, name):
