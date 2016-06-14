@@ -615,13 +615,62 @@ class PqBrowser(mechanize.Browser):
 
     def find_ctl(self):
         """Find the current GC.com ctl value."""
-        self.open("%s/pocket/default.aspx" % BASE_URL)
+        self.open("%s/seek/nearest.aspx?pq=ca588ffe-39b8-4dd6-a87f-fa943574daa1" % BASE_URL)
         response = self.response().read()
         isinstance(response, str)
         tmpl = ("javascript:__doPostBack('ctl00$ContentBody$PQDownloadList$"
                 "uxDownloadPQList$ctl")
         ind = response.index(tmpl)+len(tmpl)
         return response[ind:ind+2]
+
+    def next_page(self):
+        self.open("%s/seek/nearest.aspx?pq=ca588ffe-39b8-4dd6-a87f-fa943574daa1" % BASE_URL)
+        
+        items = []
+
+        #first page
+        response = self.response().read();
+
+        tmp_items = re.findall("data-id=\".*\"", response)
+
+        for i in tmp_items:
+            items.append(i.split()[0].split("=")[1].replace('"', ''));
+
+        print len(items)
+
+        for i in range(1, 50):
+            cmd = "ctl00$ContentBody$pgrTop$ctl08"
+            self.select_form(name="aspnetForm")
+            self.form.set_all_readonly(False)
+            self.form['__EVENTTARGET'] = (cmd)
+            self.submit()
+
+            response = self.response().read();
+            tmp_items = re.findall("data-id=\".*\"", response)
+            print len(tmp_items)
+            for i in tmp_items:
+                items.append(i.split()[0].split("=")[1].replace('"', ''));
+        
+        ## download
+        for item in items:
+            print item
+            self.open("%s/seek/sendtogps.aspx?wptid=%s" % (BASE_URL, item))
+            self.select_form(name="Form1")
+            self.form.set_all_readonly(False)
+            self.form['__EVENTTARGET'] = ('uxGPSProviderTabs')
+            self.form['__EVENTARGUMENT'] = ('2')
+            self.submit()
+            response = self.response().read();
+
+            #save to gpx
+            useful_gpx_data = re.findall(r"<textarea .*?/textarea>", response, re.S) 
+            name = useful_gpx_data[1] 
+            name = name.split('>')[1].split('<')[0]
+            gpx = useful_gpx_data[0] 
+            for i in re.findall(r'<.?textarea.*?>', gpx):
+                gpx = gpx.replace(i, '')
+
+            open("gpx/"+name, "w").write(gpx)
 
     def get_link_db(self, special):
         """Gets the link DB. Requires login first!"""
@@ -635,45 +684,65 @@ class PqBrowser(mechanize.Browser):
             response = open(self.pqfile, 'r')
         #f = open('debug.txt')
         #response = f.read()
+        #print response
 
         soup = BeautifulSoup.BeautifulSoup(response)
-        links = soup(id=re.compile("trPQDownloadRow"))
+        #links = soup(id=re.compile("trPQDownloadRow"))
+        links = soup(id=re.compile(""))
 
         logger.log(5, response)
 
         linklist = []
-        for link in links:
-            try:
-                chkdelete = link.contents[1].contents[1]['value']
-            except IndexError:
-                if special:
-                    chkdelete = 'myfinds'
-                else:
-                    logger.debug("MyFinds skipped because of -n" )
-                    continue
+#        for link in links:
+#            try:
+#                chkdelete = link.contents[1].contents[1]['value']
+#            except IndexError:
+#                if special:
+#                    chkdelete = 'myfinds'
+#                else:
+#                    logger.debug("MyFinds skipped because of -n" )
+#                    continue
+#
+#            linklist.append({
+#                'type': 'normal',
+#                'index': link.contents[3].contents[0].strip().strip('.'),
+#                'url': link.contents[5].contents[3]['href'],
+#                'name': link.contents[5].contents[3].contents[0].strip(),
+#                'friendlyname': slugify(link.contents[5].contents[3].\
+#                                        contents[0].strip()),
+#                'size': link.contents[7].contents[0].strip(),
+#                'count': link.contents[9].contents[0].strip(),
+#                'date': link.contents[11].contents[0].strip().split(' ')[0].\
+#                                        replace('/','-'),
+#                #'preserve': link.contents[11].contents[0].split(' ',1)[1]\
+#                #[1:-1],
+#                'chkdelete': chkdelete,
+#            })
 
-            linklist.append({
+
+
+        # TODO: this is a very dirty hack
+        # it only deal with the pq I want.
+        # It should query from new html from gc
+        linklist.append({
                 'type': 'normal',
-                'index': link.contents[3].contents[0].strip().strip('.'),
-                'url': link.contents[5].contents[3]['href'],
-                'name': link.contents[5].contents[3].contents[0].strip(),
-                'friendlyname': slugify(link.contents[5].contents[3].\
-                                        contents[0].strip()),
-                'size': link.contents[7].contents[0].strip(),
-                'count': link.contents[9].contents[0].strip(),
-                'date': link.contents[11].contents[0].strip().split(' ')[0].\
-                                        replace('/','-'),
-                #'preserve': link.contents[11].contents[0].split(' ',1)[1]\
-                #[1:-1],
-                'chkdelete': chkdelete,
+                'index': '1',
+                'url': '/seek/nearest.aspx?pq=ca588ffe-39b8-4dd6-a87f-fa943574daa1' ,
+                'name': '1',
+                'friendlyname': '1',
+                'size': '1000',
+                'count': '1000',
+                'date': '2016-06-14',
+                'chkdelete': '1',
             })
-
+    
         return linklist
 
     def download_pq(self, link, filename, hook):
         """Retrieve a PQ from an URL and save it"""
-        baseurl = 'http://www.geocaching.com'
-        self.retrieve(baseurl+link, filename, hook)
+        baseurl = 'https://www.geocaching.com'
+        #self.retrieve(baseurl+link, filename, hook)
+        self.next_page()
 
 def slugify(value):
     """
@@ -877,7 +946,7 @@ def main():
 
     delay()
 
-
+    exit()
     class FilenameDict(object):
         """A special dictionary for filename templates whose values depend on
         the parameters given to the constructor (link and suffix).
